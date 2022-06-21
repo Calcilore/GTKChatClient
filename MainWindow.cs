@@ -67,7 +67,7 @@ class MainWindow : Window {
                 CreateMessageLabel(client.Name, message, DateTime.Now, true);
 
                 new Thread(() => {
-                    Thread.Sleep(5);
+                    Thread.Sleep(100);
                     Application.Invoke(delegate { ScrollToBottom(); });      
                 }).Start();
             });
