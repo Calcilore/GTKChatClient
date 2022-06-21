@@ -38,3 +38,5 @@ bin/
 obj/
 
 config.json
+
+*.glade~
