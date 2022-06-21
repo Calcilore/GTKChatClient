@@ -255,4 +255,25 @@
       </object>
     </child>
   </object>
+  <object class="GtkMenu" id="messageContextMenu">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="copyMessageItem">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes">Copy Message</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="addTrustedItem">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="tooltip-text" translatable="yes">Add as a trusted user</property>
+        <property name="label" translatable="yes">Add Trusted</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+  </object>
 </interface>

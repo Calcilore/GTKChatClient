@@ -22,6 +22,7 @@ class MainWindow : Window {
     [UI] private Box onlineUsersBox = null;
     [UI] private Entry messageEntry = null;
     [UI] private Button sendButton = null;
+    [UI] private Menu messageContextMenu = null;
 
     private SimpleChatAppClient client;
     private bool connected = false;
@@ -29,6 +30,7 @@ class MainWindow : Window {
     private Thread updateThread;
     private List<SimpleChatAppMessage> messages = new List<SimpleChatAppMessage>();
     private Dictionary<string, Widget> greyMessages = new Dictionary<string, Widget>();
+    private string clickedMessageId;
 
     public MainWindow() : this(new Builder("MainWindow.glade")) { }
 
@@ -43,6 +45,16 @@ class MainWindow : Window {
         serverIPEntry.Text = Prefs.GetString("serverIP", "");
         usernameEntry.Text = Prefs.GetString("username", "");
         channelNameEntry.Text = Prefs.GetString("channel", "");
+        
+        // Message Context Menu:
+        ((MenuItem)messageContextMenu.Children[0]).Activated += (_, _) => { // Copy Message
+            Clipboard.Get(Gdk.Atom.Intern("CLIPBOARD", true)).Text
+                = GetMessageFromId(clickedMessageId).text;
+        };
+        
+        ((MenuItem)messageContextMenu.Children[1]).Activated += (_, _) => { // Add Trusted
+            client.TrustedUsers.AddVerifiedUser(GetMessageFromId(clickedMessageId));
+        };
 
         Application.Invoke(delegate {
             Window.Title = TitleStart;
@@ -55,6 +67,10 @@ class MainWindow : Window {
         Application.Quit();
     }
 
+    private SimpleChatAppMessage GetMessageFromId(string id) {
+        return messages.Find(m => m.messageId == id);
+    }
+
     private void SendMessagePressed() {
         if (!connected) return;
 
@@ -62,9 +78,10 @@ class MainWindow : Window {
             string message = Commands.Emoticons(messageEntry.Text);
             string id = client.SendMessage(message).messageId;
             messageEntry.Text = "";
-
+            
+            SimpleChatAppMessage lastMessage = messages.Count > 0 ? messages[^1] : null;
             Application.Invoke(delegate {
-                CreateMessageLabel(messages[^1], client.Name, message, DateTime.Now, id, true);
+                CreateMessageLabel(lastMessage, client.Name, message, DateTime.Now, id, false, true);
 
                 new Thread(() => {
                     Thread.Sleep(100);
@@ -77,14 +94,15 @@ class MainWindow : Window {
     private void ConnectPressed(object sender, EventArgs e) {
         connectButton.Label = "Connecting...";
         
-        greyMessages.Clear();
-        
-        ClearBox(messagesBox);
-        ClearBox(onlineUsersBox);
-        
         // Stop old Thread
         continueUpdateThread = false;
         while (updateThread is { IsAlive: true }) Thread.Sleep(50);
+        
+        greyMessages.Clear();
+        messages.Clear();
+        
+        ClearBox(messagesBox);
+        ClearBox(onlineUsersBox);
 
         // Start Thread
         continueUpdateThread = true;
@@ -102,11 +120,22 @@ class MainWindow : Window {
         adjustment.Value = adjustment.Upper;
     }
 
-    private void CreateMessageLabel(SimpleChatAppMessage previousMessage, string creator, string message, DateTime time, string id, bool grey = false) {
+    private void CreateMessageLabel(SimpleChatAppMessage previousMessage, string creator, string message, DateTime time, string id, bool trusted, bool grey = false) {
         // Combine Messages
         // if creator name is the same, and was sent in the same minute, combine messages
         bool combine = previousMessage != null && previousMessage.creatorName == creator &&
                        time - DateTime.FromBinary(previousMessage.createdAt).ToLocalTime() < TimeSpan.FromMinutes(1);
+
+        EventBox box = new EventBox();
+        box.ButtonPressEvent += (_, args) => {
+            // only allow right clicks
+            if (args.Event.Button != 3) return;
+
+            clickedMessageId = id;
+
+            messageContextMenu.Children[1].Sensitive = !client.TrustedUsers.CheckUser(GetMessageFromId(id));
+            messageContextMenu.Popup();
+        };
 
         Label label = new Label("");
         label.Justify = Justification.Left;
@@ -115,12 +144,16 @@ class MainWindow : Window {
         label.Xalign = 0;
         label.LineWrap = true;
         label.LineWrapMode = WrapMode.WordChar;
-        
+
         if (combine) {
             label.Markup = message;
         }
         else {
-            label.Markup = $"<b>{creator}</b> - <small>{time}</small>\n{message}";
+            label.Markup = trusted ? 
+                $"<b>{creator}</b> <span foreground=\"green\" style=\"italic\" size=\"larger\">✓</span> - " +
+                    $"<small>{time}</small>\n{message}" : 
+                $"<b>{creator}</b> - <small>{time}</small>\n{message}";
+
             label.MarginTop = 10;
         }
         
@@ -128,25 +161,40 @@ class MainWindow : Window {
             label.Opacity = 0.7;
             greyMessages.Add(id, label);
         }
+
+        box.Add(label);
+        messagesBox.Add(box);
         
-        messagesBox.Add(label);
+        box.Show();
         label.Show();
     }
     
     private void MessageUpdateThread() {
-        Application.Invoke(delegate {  
-            string ip = serverIPEntry.Text;
+        string ip = null;
+        continueUpdateThread = false;
+        
+        Application.Invoke(delegate {
+            ip = serverIPEntry.Text;
             if (string.IsNullOrEmpty(ip)) {
                 ip = "https://chat.zaneharrison.com";
             }
-        
-            Prefs.SetString("username", usernameEntry.Text);
-            Prefs.SetString("channel", channelNameEntry.Text);
-            Prefs.SetString("serverIP", ip);
-            Prefs.Save();
 
-            client = new SimpleChatAppClient(ip, usernameEntry.Text, channelNameEntry.Text);
-            if (!client.TestConnection()) {
+            continueUpdateThread = true;
+        });
+        
+        while (!continueUpdateThread) { Thread.Sleep(16); }
+        
+        Prefs.SetString("username", usernameEntry.Text);
+        Prefs.SetString("channel", channelNameEntry.Text);
+        Prefs.SetString("serverIP", ip);
+        Prefs.Save();
+        
+        client = new SimpleChatAppClient(ip, usernameEntry.Text, channelNameEntry.Text);
+
+        bool connectTest = client.TestConnection();
+        
+        Application.Invoke(delegate {
+            if (!connectTest) {
                 connectButton.Label = "Connection Failed.";
                 return;
             }
@@ -166,8 +214,7 @@ class MainWindow : Window {
         bool firstTime = true;
 
         while (continueUpdateThread) {
-            SimpleChatAppMessage lastMessage;
-            lastMessage = messages.Count > 0 ? messages[^1] : null;
+            SimpleChatAppMessage lastMessage = messages.Count > 0 ? messages[^1] : null;
             
             List<SimpleChatAppMessage> newMessages = new List<SimpleChatAppMessage>();
             {
@@ -185,11 +232,11 @@ class MainWindow : Window {
             Array.Sort(users);
             
             Application.Invoke(delegate {
-                ClearBox(onlineUsersBox);
-                
                 foreach (SimpleChatAppMessage message in newMessages) {
+                    bool isTrusted = client.TrustedUsers.CheckUser(message);
+
                     if (message.creatorName == client.Name) {
-                        //messages.Find(eMessage => eMessage.messageId == message.messageId);
+                        // try to find the message in greyMessages and make that have full opacity
                         if (greyMessages.TryGetValue(message.messageId, out Widget label)) {
                             label.Opacity = 1d;
                             greyMessages.Remove(message.messageId);
@@ -198,11 +245,12 @@ class MainWindow : Window {
                     }
                     
                     CreateMessageLabel(lastMessage, message.creatorName, message.text, 
-                        DateTime.FromBinary(message.createdAt).ToLocalTime(), message.messageId);
+                        DateTime.FromBinary(message.createdAt).ToLocalTime(), message.messageId, isTrusted);
 
                     lastMessage = message;
                 }
                 
+                ClearBox(onlineUsersBox);
                 foreach (string user in users) {
                     Label label = new Label(user);
                     label.Justify = Justification.Left;
