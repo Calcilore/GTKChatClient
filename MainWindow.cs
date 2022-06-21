@@ -60,11 +60,11 @@ class MainWindow : Window {
 
         new Thread(() => {
             string message = Commands.Emoticons(messageEntry.Text);
-            client.SendMessage(message);
+            string id = client.SendMessage(message).messageId;
             messageEntry.Text = "";
 
             Application.Invoke(delegate {
-                CreateMessageLabel(client.Name, message, DateTime.Now, true);
+                CreateMessageLabel(messages[^1], client.Name, message, DateTime.Now, id, true);
 
                 new Thread(() => {
                     Thread.Sleep(100);
@@ -102,20 +102,32 @@ class MainWindow : Window {
         adjustment.Value = adjustment.Upper;
     }
 
-    private void CreateMessageLabel(string creator, string message, DateTime time, bool grey = false) {
+    private void CreateMessageLabel(SimpleChatAppMessage previousMessage, string creator, string message, DateTime time, string id, bool grey = false) {
+        // Combine Messages
+        // if creator name is the same, and was sent in the same minute, combine messages
+        bool combine = previousMessage != null && previousMessage.creatorName == creator &&
+                       time - DateTime.FromBinary(previousMessage.createdAt).ToLocalTime() < TimeSpan.FromMinutes(1);
+
         Label label = new Label("");
         label.Justify = Justification.Left;
         label.Xpad = 10;
-        label.Ypad = 10;
-        label.Markup = $"<b>{creator}</b> - <small>{time}</small>\n{message}";
         label.UseMarkup = true;
         label.Xalign = 0;
         label.LineWrap = true;
         label.LineWrapMode = WrapMode.WordChar;
+        
+        if (combine) {
+            label.Markup = message;
+        }
+        else {
+            label.Markup = $"<b>{creator}</b> - <small>{time}</small>\n{message}";
+            label.MarginTop = 10;
+        }
+        
         if (grey) {
             label.Opacity = 0.7;
-            greyMessages.Add(message, label);
-        }   
+            greyMessages.Add(id, label);
+        }
         
         messagesBox.Add(label);
         label.Show();
@@ -154,6 +166,9 @@ class MainWindow : Window {
         bool firstTime = true;
 
         while (continueUpdateThread) {
+            SimpleChatAppMessage lastMessage;
+            lastMessage = messages.Count > 0 ? messages[^1] : null;
+            
             List<SimpleChatAppMessage> newMessages = new List<SimpleChatAppMessage>();
             {
                 IEnumerable<SimpleChatAppMessage> receivedMessages = client.GetMessages(24);
@@ -175,15 +190,17 @@ class MainWindow : Window {
                 foreach (SimpleChatAppMessage message in newMessages) {
                     if (message.creatorName == client.Name) {
                         //messages.Find(eMessage => eMessage.messageId == message.messageId);
-                        if (greyMessages.TryGetValue(message.text, out Widget label)) {
+                        if (greyMessages.TryGetValue(message.messageId, out Widget label)) {
                             label.Opacity = 1d;
-                            greyMessages.Remove(message.text);
+                            greyMessages.Remove(message.messageId);
                             continue;
                         }
                     }
                     
-                    CreateMessageLabel(message.creatorName, message.text, 
-                        DateTime.FromBinary(message.createdAt).ToLocalTime());
+                    CreateMessageLabel(lastMessage, message.creatorName, message.text, 
+                        DateTime.FromBinary(message.createdAt).ToLocalTime(), message.messageId);
+
+                    lastMessage = message;
                 }
                 
                 foreach (string user in users) {
