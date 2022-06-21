@@ -7,7 +7,7 @@ namespace ChatAppClient;
 public static class Prefs {
     private static Dictionary<string, string> prefs;
 
-    public static string? GetString(string key) {
+    public static string GetString(string key) {
         if (prefs == null) {
             // Load prefs from disk
             Load();
