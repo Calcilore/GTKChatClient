@@ -26,7 +26,9 @@ class MainWindow : Window {
     private SimpleChatAppClient client;
     private bool connected = false;
     private bool continueUpdateThread = true;
-    public Thread updateThread;
+    private Thread updateThread;
+    private List<SimpleChatAppMessage> messages = new List<SimpleChatAppMessage>();
+    private Dictionary<string, Widget> greyMessages = new Dictionary<string, Widget>();
 
     public MainWindow() : this(new Builder("MainWindow.glade")) { }
 
@@ -56,22 +58,29 @@ class MainWindow : Window {
     private void SendMessagePressed() {
         if (!connected) return;
 
-        string message = Commands.Emoticons(messageEntry.Text);
-        client.SendMessage(message);
-        messageEntry.Text = "";
-        
-        CreateMessageLabel(client.Name, message, DateTime.Now, true);
-        
         new Thread(() => {
-            Thread.Sleep(5);
-            Application.Invoke(delegate { ScrollToBottom(); });    
+            string message = Commands.Emoticons(messageEntry.Text);
+            client.SendMessage(message);
+            messageEntry.Text = "";
+
+            Application.Invoke(delegate {
+                CreateMessageLabel(client.Name, message, DateTime.Now, true);
+
+                new Thread(() => {
+                    Thread.Sleep(5);
+                    Application.Invoke(delegate { ScrollToBottom(); });      
+                }).Start();
+            });
         }).Start();
     }
     
     private void ConnectPressed(object sender, EventArgs e) {
         connectButton.Label = "Connecting...";
         
-        ClearBoxes();
+        greyMessages.Clear();
+        
+        ClearBox(messagesBox);
+        ClearBox(onlineUsersBox);
         
         // Stop old Thread
         continueUpdateThread = false;
@@ -82,12 +91,10 @@ class MainWindow : Window {
         updateThread = new Thread(MessageUpdateThread);
         updateThread.Start();
     }
-
-    private void ClearBoxes() {
-        foreach (Widget child in messagesBox.Children)
-            messagesBox.Remove(child);
-        foreach (Widget user in onlineUsersBox.Children)
-            onlineUsersBox.Remove(user);
+    
+    private void ClearBox(Box box) {
+        foreach (Widget child in box.Children)
+            box.Remove(child);
     }
 
     private void ScrollToBottom() {
@@ -105,7 +112,10 @@ class MainWindow : Window {
         label.Xalign = 0;
         label.LineWrap = true;
         label.LineWrapMode = WrapMode.WordChar;
-        if (grey) label.Opacity = 0.7;
+        if (grey) {
+            label.Opacity = 0.7;
+            greyMessages.Add(message, label);
+        }   
         
         messagesBox.Add(label);
         label.Show();
@@ -144,14 +154,34 @@ class MainWindow : Window {
         bool firstTime = true;
 
         while (continueUpdateThread) {
-            IEnumerable<SimpleChatAppMessage> messages = client.GetMessages(24);
+            List<SimpleChatAppMessage> newMessages = new List<SimpleChatAppMessage>();
+            {
+                IEnumerable<SimpleChatAppMessage> receivedMessages = client.GetMessages(24);
+
+                foreach (SimpleChatAppMessage message in receivedMessages) {
+                    if (messages.Any(eMessage => eMessage.messageId == message.messageId)) continue;
+                    
+                    messages.Add(message);
+                    newMessages.Add(message);
+                }
+            }
+
             string[] users = client.GetOnlineUsers().ToArray();
             Array.Sort(users);
             
             Application.Invoke(delegate {
-                ClearBoxes();
+                ClearBox(onlineUsersBox);
                 
-                foreach (SimpleChatAppMessage message in messages) {
+                foreach (SimpleChatAppMessage message in newMessages) {
+                    if (message.creatorName == client.Name) {
+                        //messages.Find(eMessage => eMessage.messageId == message.messageId);
+                        if (greyMessages.TryGetValue(message.text, out Widget label)) {
+                            label.Opacity = 1d;
+                            greyMessages.Remove(message.text);
+                            continue;
+                        }
+                    }
+                    
                     CreateMessageLabel(message.creatorName, message.text, 
                         DateTime.FromBinary(message.createdAt).ToLocalTime());
                 }
@@ -190,7 +220,6 @@ class MainWindow : Window {
             messageEntry.Sensitive = false;
             sendButton.Sensitive = false;
             connected = false;
-            ClearBoxes();
         });
     }
 }
