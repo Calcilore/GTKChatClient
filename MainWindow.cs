@@ -11,6 +11,8 @@ using WrapMode = Pango.WrapMode;
 namespace ChatAppClient; 
 
 class MainWindow : Window {
+
+    private const string TitleStart = "Chat App Client";
     
     [UI] private Entry serverIPEntry = null;
     [UI] private Entry channelNameEntry = null;
@@ -41,6 +43,7 @@ class MainWindow : Window {
         channelNameEntry.Text = Prefs.GetString("channel", "");
 
         Application.Invoke(delegate {
+            Window.Title = TitleStart;
             Window.Resize(800, 450);
         });
     }
@@ -132,6 +135,8 @@ class MainWindow : Window {
             
             connected = true;
             Console.WriteLine("Connected!");
+
+            Window.Title = TitleStart + " - " + client.Channel;
         });
         
         while (!connected) { Thread.Sleep(16); }
