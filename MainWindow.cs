@@ -234,11 +234,17 @@ class MainWindow : Window {
             Application.Invoke(delegate {
                 foreach (SimpleChatAppMessage message in newMessages) {
                     bool isTrusted = client.TrustedUsers.CheckUser(message);
-
+                    
                     if (message.creatorName == client.Name) {
                         // try to find the message in greyMessages and make that have full opacity
                         if (greyMessages.TryGetValue(message.messageId, out Widget label)) {
                             label.Opacity = 1d;
+                            Label llabel = (Label)label;
+
+                            if (label.MarginTop == 10)
+                                llabel.LabelMarkup = llabel.LabelMarkup.Insert(8 + client.Name.Length, 
+                                "<span foreground=\"green\" style=\"italic\" size=\"larger\">✓</span> ");
+
                             greyMessages.Remove(message.messageId);
                             continue;
                         }
