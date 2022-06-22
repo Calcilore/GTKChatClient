@@ -82,7 +82,7 @@ class MainWindow : Window {
             
             SimpleChatAppMessage lastMessage = messages.Count > 0 ? messages[^1] : null;
             Application.Invoke(delegate {
-                CreateMessageLabel(lastMessage, client.Name, message, DateTime.Now, id, false, true);
+                CreateMessageLabel(lastMessage, client.Name, message, DateTime.Now, id, false, client.publicKey, true);
 
                 new Thread(() => {
                     Thread.Sleep(100);
@@ -121,10 +121,11 @@ class MainWindow : Window {
         adjustment.Value = adjustment.Upper;
     }
 
-    private void CreateMessageLabel(SimpleChatAppMessage previousMessage, string creator, string message, DateTime time, string id, bool trusted, bool grey = false) {
+    private void CreateMessageLabel(SimpleChatAppMessage previousMessage, string creator, string message, DateTime time, string id, bool trusted, string publicKey, bool grey = false) {
         // Combine Messages
         // if creator name is the same, and was sent in the same minute, combine messages
-        bool combine = previousMessage != null && previousMessage.creatorName == creator &&
+        bool combine = previousMessage != null && 
+                       previousMessage.creatorName == creator && previousMessage.publicKey == publicKey &&
                        time - DateTime.FromBinary(previousMessage.createdAt).ToLocalTime() < TimeSpan.FromMinutes(1);
 
         EventBox box = new EventBox();
@@ -233,9 +234,9 @@ class MainWindow : Window {
             
             Application.Invoke(delegate {
                 foreach (SimpleChatAppMessage message in newMessages) {
-                    bool isTrusted = client.TrustedUsers.CheckUser(message);
-                    
-                    if (message.creatorName == client.Name) {
+                    bool isSameUser = message.creatorName == client.Name && message.publicKey == client.publicKey;
+
+                    if (isSameUser) {
                         // try to find the message in greyMessages and make that have full opacity
                         if (greyMessages.TryGetValue(message.messageId, out Widget label)) {
                             label.Opacity = 1d;
@@ -250,8 +251,11 @@ class MainWindow : Window {
                         }
                     }
                     
+                    bool isTrusted = client.TrustedUsers.CheckUser(message) || isSameUser;
+                    
                     CreateMessageLabel(lastMessage, message.creatorName, message.text, 
-                        DateTime.FromBinary(message.createdAt).ToLocalTime(), message.messageId, isTrusted);
+                        DateTime.FromBinary(message.createdAt).ToLocalTime(), message.messageId, isTrusted, 
+                        message.publicKey);
 
                     lastMessage = message;
                 }
