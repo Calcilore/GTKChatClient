@@ -13,6 +13,7 @@ namespace ChatAppClient;
 class MainWindow : Window {
 
     private const string TitleStart = "Chat App Client";
+    private const string CheckMark = "<span foreground=\"green\" style=\"italic\" size=\"larger\">✓</span>";
     
     [UI] private Entry serverIPEntry = null;
     [UI] private Entry channelNameEntry = null;
@@ -150,8 +151,7 @@ class MainWindow : Window {
         }
         else {
             label.Markup = trusted ? 
-                $"<b>{creator}</b> <span foreground=\"green\" style=\"italic\" size=\"larger\">✓</span> - " +
-                    $"<small>{time}</small>\n{message}" : 
+                $"<b>{creator}</b> {CheckMark} - <small>{time}</small>\n{message}" : 
                 $"<b>{creator}</b> - <small>{time}</small>\n{message}";
 
             label.MarginTop = 10;
@@ -243,7 +243,7 @@ class MainWindow : Window {
 
                             if (label.MarginTop == 10)
                                 llabel.LabelMarkup = llabel.LabelMarkup.Insert(8 + client.Name.Length, 
-                                "<span foreground=\"green\" style=\"italic\" size=\"larger\">✓</span> ");
+                                CheckMark + " ");
 
                             greyMessages.Remove(message.messageId);
                             continue;
