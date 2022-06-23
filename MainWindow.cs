@@ -19,6 +19,7 @@ class MainWindow : Window {
     [UI] private Entry channelNameEntry = null;
     [UI] private Entry usernameEntry = null;
     [UI] private Button connectButton = null;
+    [UI] private ScrolledWindow messageScrollWindow = null;
     [UI] private Box messagesBox = null;
     [UI] private Box onlineUsersBox = null;
     [UI] private Entry messageEntry = null;
@@ -117,8 +118,13 @@ class MainWindow : Window {
     }
 
     private void ScrollToBottom() {
-        Adjustment adjustment = ((ScrolledWindow)messagesBox.Parent.Parent).Vadjustment;
+        Adjustment adjustment = messageScrollWindow.Vadjustment;
         adjustment.Value = adjustment.Upper;
+    }
+
+    private bool IsScrolledToBottom() {
+        Adjustment adjustment = messageScrollWindow.Vadjustment;
+        return adjustment.Upper - (adjustment.Value + adjustment.PageSize) < 10;
     }
 
     private void CreateMessageLabel(SimpleChatAppMessage previousMessage, string creator, string message, DateTime time, string id, bool trusted, string publicKey, bool grey = false) {
@@ -182,7 +188,7 @@ class MainWindow : Window {
 
             continueUpdateThread = true;
         });
-        
+
         while (!continueUpdateThread) { Thread.Sleep(16); }
         
         Prefs.SetString("username", usernameEntry.Text);
@@ -231,8 +237,12 @@ class MainWindow : Window {
 
             string[] users = client.GetOnlineUsers().ToArray();
             Array.Sort(users);
+
+            bool scrollToBottom = false;
             
             Application.Invoke(delegate {
+                scrollToBottom = IsScrolledToBottom();
+                
                 foreach (SimpleChatAppMessage message in newMessages) {
                     bool isSameUser = message.creatorName == client.Name && message.publicKey == client.publicKey;
 
@@ -259,7 +269,7 @@ class MainWindow : Window {
 
                     lastMessage = message;
                 }
-                
+
                 ClearBox(onlineUsersBox);
                 foreach (string user in users) {
                     Label label = new Label(user);
@@ -273,6 +283,11 @@ class MainWindow : Window {
                     onlineUsersBox.Add(label);
                     label.Show();
                 }
+            });
+            
+            Thread.Sleep(100);
+            Application.Invoke(delegate {
+                if (newMessages.Count > 0 && scrollToBottom) ScrollToBottom();
             });
 
             if (firstTime) {
