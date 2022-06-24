@@ -237,10 +237,8 @@ class MainWindow : Window {
             string[] users = client.GetOnlineUsers().ToArray();
             Array.Sort(users);
 
-            bool scrollToBottom = false;
-            
             Application.Invoke(delegate {
-                scrollToBottom = IsScrolledToBottom();
+                bool scrollToBottom = IsScrolledToBottom();
                 
                 foreach (SimpleChatAppMessage message in newMessages) {
                     bool isSameUser = message.creatorName == client.Name && message.publicKey == client.publicKey;
