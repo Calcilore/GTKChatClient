@@ -83,12 +83,7 @@ class MainWindow : Window {
             
             SimpleChatAppMessage lastMessage = messages.Count > 0 ? messages[^1] : null;
             Application.Invoke(delegate {
-                CreateMessageLabel(lastMessage, client.Name, message, DateTime.Now, id, false, client.publicKey, true);
-
-                new Thread(() => {
-                    Thread.Sleep(100);
-                    Application.Invoke(delegate { ScrollToBottom(); });      
-                }).Start();
+                CreateMessageLabel(lastMessage, client.Name, message, DateTime.Now, id, false, client.publicKey, true, grey: true);
             });
         }).Start();
     }
@@ -98,7 +93,7 @@ class MainWindow : Window {
         
         // Stop old Thread
         continueUpdateThread = false;
-        while (updateThread is { IsAlive: true }) Thread.Sleep(50);
+        while (updateThread is { IsAlive: true }) Thread.Sleep(16);
         
         greyMessages.Clear();
         messages.Clear();
@@ -127,7 +122,7 @@ class MainWindow : Window {
         return adjustment.Upper - (adjustment.Value + adjustment.PageSize) < 10;
     }
 
-    private void CreateMessageLabel(SimpleChatAppMessage previousMessage, string creator, string message, DateTime time, string id, bool trusted, string publicKey, bool grey = false) {
+    private void CreateMessageLabel(SimpleChatAppMessage previousMessage, string creator, string message, DateTime time, string id, bool trusted, string publicKey, bool scrollToBottom, bool grey = false) {
         // Combine Messages
         // if creator name is the same, and was sent in the same minute, combine messages
         bool combine = previousMessage != null && 
@@ -167,6 +162,12 @@ class MainWindow : Window {
         if (grey) {
             label.Opacity = 0.7;
             greyMessages.Add(id, label);
+        }
+
+        if (scrollToBottom) {
+            label.SizeAllocated += (_, _) => {
+                ScrollToBottom();
+            };
         }
 
         box.Add(label);
@@ -218,8 +219,6 @@ class MainWindow : Window {
         
         while (!connected) { Thread.Sleep(16); }
 
-        bool firstTime = true;
-
         while (continueUpdateThread) {
             SimpleChatAppMessage lastMessage = messages.Count > 0 ? messages[^1] : null;
             
@@ -265,7 +264,7 @@ class MainWindow : Window {
                     
                     CreateMessageLabel(lastMessage, message.creatorName, message.text, 
                         DateTime.FromBinary(message.createdAt).ToLocalTime(), message.messageId, isTrusted, 
-                        message.publicKey);
+                        message.publicKey, scrollToBottom);
 
                     lastMessage = message;
                 }
@@ -284,21 +283,6 @@ class MainWindow : Window {
                     label.Show();
                 }
             });
-            
-            Thread.Sleep(100);
-            Application.Invoke(delegate {
-                if (newMessages.Count > 0 && scrollToBottom) ScrollToBottom();
-            });
-
-            if (firstTime) {
-                Thread.Sleep(100);
-                
-                Application.Invoke(delegate {
-                    ScrollToBottom();
-                });
-                
-                firstTime = false;
-            }
 
             for (int i = 0; i < 5 && continueUpdateThread; i++) {
                 Thread.Sleep(100);
